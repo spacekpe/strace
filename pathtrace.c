@@ -28,6 +28,8 @@
 
 #include "defs.h"
 #include <sys/param.h>
+#include <sys/socket.h>
+#include <sys/un.h>
 #if defined HAVE_POLL_H
 # include <poll.h>
 #elif defined HAVE_SYS_POLL_H
@@ -334,6 +336,23 @@ pathtrace_match(struct tcb *tcp)
 				return 1;
 
 		return 0;
+	}
+
+	if (s->sys_func == sys_bind ||
+	    s->sys_func == sys_connect ||
+	    s->sys_func == sys_getsockname) {
+		/* Handle AF_UNIX */
+		int match = 0;
+		struct sockaddr_un addr;
+		if (umoven(tcp, tcp->u_arg[1], sizeof (struct sockaddr_un),
+			(char *)&addr) != 0 || (addr.sun_family != AF_UNIX))
+			return 0;
+		
+		match = fdmatch(tcp, tcp->u_arg[0]);
+		if (match)
+			return match;
+
+		return pathmatch(addr.sun_path);
 	}
 
 	if (s->sys_func == printargs ||

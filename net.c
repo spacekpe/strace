@@ -29,6 +29,7 @@
  */
 
 #include "defs.h"
+#include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
 #include <sys/un.h>
@@ -549,6 +550,15 @@ sys_bind(struct tcb *tcp)
 		tprints(", ");
 		printsock(tcp, tcp->u_arg[1], tcp->u_arg[2]);
 		tprintf(", %lu", tcp->u_arg[2]);
+	} else if (exiting(tcp)) {
+		struct sockaddr_un addr;
+		char path[PATH_MAX + 1];
+		if ((tcp->u_rval == 0) && (pathtrace_match(tcp)))
+		if (umoven(tcp, tcp->u_arg[1], sizeof (struct sockaddr_un),
+			(char *)&addr) == 0 && (addr.sun_family == AF_UNIX)) {
+			if (getfdpath(tcp, tcp->u_arg[0], path, sizeof path) > 0)
+				pathtrace_select(path);
+		}
 	}
 	return 0;
 }
@@ -603,6 +613,12 @@ int
 sys_accept(struct tcb *tcp)
 {
 	do_sockname(tcp, -1);
+
+	if (exiting(tcp)) {
+		char path[PATH_MAX + 1];
+		if (getfdpath(tcp, tcp->u_rval, path, sizeof path) > 0)
+			pathtrace_select(path);
+	}
 	return RVAL_FD;
 }
 
@@ -610,6 +626,11 @@ int
 sys_accept4(struct tcb *tcp)
 {
 	do_sockname(tcp, 3);
+	if (exiting(tcp)) {
+		char path[PATH_MAX + 1];
+		if (getfdpath(tcp, tcp->u_rval, path, sizeof path) > 0)
+			pathtrace_select(path);
+	}
 	return RVAL_FD;
 }
 
